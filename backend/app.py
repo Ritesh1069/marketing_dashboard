@@ -18,6 +18,7 @@ from io import BytesIO
 import base64
 import random
 import numpy as np
+import requests
 
 # Download required NLTK data
 nltk.download('punkt')
@@ -29,6 +30,7 @@ CORS(app)
 
 # Set API key
 os.environ["GROQ_API_KEY"] = "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"
+stability_api_key = "sk-gEUN699bN7A1eptOqnc3fqquKo8awZ6im1jr725xSrahIXCp"
 groq_model = Groq(id="llama-3.3-70b-specdec")
 
 # Initialize content team
@@ -66,6 +68,18 @@ content_team = {
         ]
     )
 }
+
+content_agent = Agent(
+    model=Groq(id="llama-3.3-70b-specdec"),
+    instructions=[
+    "extract the product/event details from the input and generate a detailed prompt for generating a high-quality background image for marketing purposes ",
+    "The prompt must be optimized for the SD3.5-Large-Turbo text-to-image model and must not mention the product in any way.",
+    "The background must be minimalistic, professional, and clean, ensuring a neutral, aesthetically pleasing design suitable for a marketing poster.",
+    "No objects, patterns, or distracting elements should be present—only a smooth, subtle gradient, soft light effects, or abstract professional textures that enhance product placement.",
+    "Avoid high-contrast details; ensure the background complements a pasted product image without overpowering it.",
+    "the output should strictly only contain the prompt nothing else."
+    ]
+)
 
 REFERENCE_RESPONSES = ["Example of ideal marketing content for evaluation"]
 
@@ -109,24 +123,35 @@ def evaluate_content(response: str) -> dict:
         "persuasiveness": evaluate_persuasiveness(response)
     }
 
-def generate_placeholder_image(width=512, height=512):
-    """Generate a placeholder image with random colored shapes."""
-    image = Image.new('RGB', (width, height), 'white')
-    pixels = image.load()
-    
-    # Generate some random shapes
-    for _ in range(50):
-        x = random.randint(0, width-1)
-        y = random.randint(0, height-1)
-        color = (random.randint(0,255), random.randint(0,255), random.randint(0,255))
-        size = random.randint(20, 100)
-        
-        for i in range(max(0, x-size), min(width, x+size)):
-            for j in range(max(0, y-size), min(height, y+size)):
-                if (i-x)**2 + (j-y)**2 < size**2:
-                    pixels[i,j] = color
-    
-    return image
+def generate_image(prompt):
+    try:
+        response = requests.post(
+            "https://api.stability.ai/v2beta/stable-image/generate/sd3",
+            headers={
+                "Authorization": f"Bearer {stability_api_key}",
+                "Accept": "application/json"
+            },
+            files={"none": ''},
+            data={
+                "prompt": prompt,
+                "model": "sd3.5-large",
+                "width": 512,
+                "height": 512,
+                "steps": 30,
+                "cfg_scale": 7,
+                "samples": 1
+            }
+        )
+
+        if response.status_code == 200:
+            image_data = base64.b64decode(response.json()["image"])
+            return Image.open(BytesIO(image_data))
+        else:
+            print(f"Error: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        print(f"Error generating image: {str(e)}")
+        return None
 
 def evaluate_image_sharpness(image):
     """Evaluate image sharpness using Laplacian variance."""
@@ -157,8 +182,8 @@ def analyze():
         research_content = content_team["market_researcher"].run(prompt).content
         
         # Generate image description and placeholder image
-        image_description = content_team["image_specialist"].run(prompt).content
-        poster_image = generate_placeholder_image()
+        image_description = content_agent.run(prompt).content
+        poster_image = generate_image(image_description)
         
         # Convert image to base64
         buffered = BytesIO()

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ContentEvaluation from './components/ContentEvaluation';
 import './App.css';
-
+import Navbar from './components/Navbar/Navbar'
 function App() {
   const [prompt, setPrompt] = useState('');
   const [data, setData] = useState(null);
@@ -14,7 +14,7 @@ function App() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:5000/api/analyze', {
+      const response = await fetch('http://localhost:8080/api/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -37,6 +37,8 @@ function App() {
   };
 
   return (
+    <div>
+      <Navbar/>
     <div className="container">
       <h1 className="title">Content Generation & Analysis</h1>
       
@@ -61,6 +63,7 @@ function App() {
       {error && <div className="error">{error}</div>}
       
       {data && <ContentEvaluation data={data} />}
+    </div>
     </div>
   );
 }
